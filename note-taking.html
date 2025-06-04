@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Local Storage Notes</title>
+    <style>
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .note { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .note-content { margin: 5px 0; }
+        .note-date { font-size: 0.8em; color: #666; }
+        button { margin: 5px; padding: 5px 10px; cursor: pointer; }
+        #notesList { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Notes App</h1>
+        <form id="noteForm">
+            <textarea id="noteInput" rows="4" cols="50" placeholder="Enter your note..."></textarea>
+            <button type="submit">Save Note</button>
+        </form>
+        <div id="notesList"></div>
+    </div>
+
+    <script>
+        // Initialize notes from localStorage
+        let notes = JSON.parse(localStorage.getItem('notes')) || [];
+        
+        // Display existing notes on page load
+        document.addEventListener('DOMContentLoaded', displayNotes);
+
+        // Form submission handler
+        document.getElementById('noteForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const noteInput = document.getElementById('noteInput');
+            const noteId = document.querySelector('#noteForm [name="id"]')?.value;
+            
+            if (noteId) {
+                updateNote(noteId, noteInput.value);
+            } else {
+                createNote(noteInput.value);
+            }
+            noteInput.value = '';
+            displayNotes();
+        });
+
+        // Create new note
+        function createNote(content) {
+            const newNote = {
+                id: Date.now(),
+                content: content,
+                date: new Date().toLocaleString()
+            };
+            notes.push(newNote);
+            localStorage.setItem('notes', JSON.stringify(notes));
+        }
+
+        // Read all notes
+        function displayNotes() {
+            const notesList = document.getElementById('notesList');
+            notesList.innerHTML = '';
+            
+            notes.forEach(note => {
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'note';
+                noteDiv.innerHTML = `
+                    <div class="note-content">${linkify(note.content)}</div>
+                    <div class="note-date">${note.date}</div>
+                    <button onclick="editNote(${note.id})">Edit</button>
+                    <button onclick="deleteNote(${note.id})">Delete</button>
+                `;
+                notesList.appendChild(noteDiv);
+            });
+        }
+
+        // Update existing note
+        function updateNote(id, newContent) {
+            notes = notes.map(note => 
+                note.id === Number(id) 
+                ? {...note, content: newContent, date: new Date().toLocaleString()} 
+                : note
+            );
+            localStorage.setItem('notes', JSON.stringify(notes));
+        }
+
+        // Delete note
+        function deleteNote(id) {
+            notes = notes.filter(note => note.id !== Number(id));
+            localStorage.setItem('notes', JSON.stringify(notes));
+            displayNotes();
+        }
+
+        // Edit note
+        function editNote(id) {
+            const note = notes.find(note => note.id === Number(id));
+            document.getElementById('noteInput').value = note.content;
+            document.getElementById('noteForm').innerHTML += 
+                `<input type="hidden" name="id" value="${note.id}">`;
+        }
+
+        // Convert URLs to clickable links
+        function linkify(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return text.replace(urlRegex, url => 
+                `<a href="${url}" target="_blank">${url}</a>`
+            );
+        }
+    </script>
+</body>
+</html>
