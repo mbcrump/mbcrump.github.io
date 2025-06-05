@@ -50,9 +50,8 @@
     remoteStorage.access.claim('notes', 'rw');
     remoteStorage.caching.enable('/notes/');
 
-    // Attach the Connect Widget
-    const widget = new Widget(remoteStorage);
-    widget.attach('remotestorage-widget-anchor');
+    // Attach the Connect Widget (this is the CORRECT way)
+    remoteStorage.displayWidget('remotestorage-widget-anchor');
 
     // UI elements
     const noteForm = document.getElementById('noteForm');
@@ -144,4 +143,6 @@
       await loadNotes();
     };
 
-    // Show/hide UI based on connection
+    // Show/hide UI based on connection state
+    remoteStorage.on('connected', function() {
+      note
