@@ -1,2 +1,2 @@
-https://mbcrump.github.io/gentweet.html
-https://mbcrump.github.io/notetaking.html
+* [Generate Tweet](https://mbcrump.github.io/gentweet.html)
+* [Notes](https://mbcrump.github.io/notetaking.html)
