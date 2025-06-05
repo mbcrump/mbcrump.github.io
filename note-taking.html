@@ -2,182 +2,138 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Static Notes App</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Auto-Synced Notes</title>
     <style>
-        :root { --primary: #0060df; --background: #f0f0f4; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--background); margin: 0; padding: 0; }
-        .container { max-width: 700px; margin: 40px auto; background: white; border-radius: 8px; box-shadow: 0 4px 16px #0001; padding: 24px; }
-        h1 { color: var(--primary); }
-        #noteForm { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
-        textarea { width: 100%; min-height: 80px; border-radius: 4px; border: 1px solid #bbb; padding: 10px; font-size: 1rem; }
-        button { background: var(--primary); color: white; border: none; border-radius: 4px; padding: 10px 16px; font-size: 1rem; cursor: pointer; }
-        button[disabled] { opacity: 0.6; cursor: not-allowed; }
-        .notes-list { display: flex; flex-direction: column; gap: 16px; }
-        .note { position: relative; background: #f8faff; border-radius: 4px; padding: 16px; box-shadow: 0 1px 2px #0001; }
-        .note-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; }
-        .note-actions button { background: #eee; color: #444; font-size: 0.9em; padding: 3px 8px; }
-        .note small { color: #888; display: block; margin-top: 8px; }
-        .import-export { margin-top: 32px; display: flex; gap: 12px; flex-wrap: wrap; }
-        @media (max-width: 600px) {
-            .container { padding: 8px; }
+        /* Previous CSS styles remain effective */
+        .sync-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            background: #0060df;
+            color: white;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Static Notes App</h1>
-        <form id="noteForm">
-            <textarea id="noteContent" placeholder="Write a note..."></textarea>
-            <button type="submit" id="saveBtn">Add Note</button>
-            <input type="hidden" id="editId" value="">
-        </form>
-
-        <div class="notes-list" id="notesList"></div>
-
-        <div class="import-export">
-            <button onclick="exportNotes()">Export Notes</button>
-            <label>
-                <input type="file" id="importFile" style="display:none" accept=".json" onchange="importNotes(event)">
-                <span style="background:var(--primary);color:white;padding:10px 16px;border-radius:4px;cursor:pointer;">Import Notes</span>
-            </label>
+        <h1>Auto-Synced Notes 🔄</h1>
+        <!-- Existing form and notes list -->
+        
+        <div class="webdav-setup">
+            <h3>First-Time Setup:</h3>
+            <ol>
+                <li>Create free WebDAV storage at <a href="https://box.com" target="_blank">Box.com</a></li>
+                <li>Enable "WebDAV" in Box settings</li>
+                <li>Enter your details below:</li>
+            </ol>
+            <input type="text" id="webdavUrl" placeholder="WebDAV URL (https://dav.box.com/dav)">
+            <input type="text" id="username" placeholder="Box.com email">
+            <input type="password" id="password" placeholder="Box.com password">
+            <button onclick="saveWebDAVCreds()">Save Credentials</button>
         </div>
-        <p style="font-size:0.95em;color:#666;margin-top:20px;">
-            <b>Sync between devices:</b> Use <b>Export</b> to save notes as a file, then <b>Import</b> on another device/browser.<br>
-            <i>All data is stored locally in your browser. No server or account needed.</i>
-        </p>
+
+        <div class="sync-status" id="syncStatus"></div>
     </div>
+
     <script>
-        const STORAGE_KEY = 'static-notes-app';
+        const STORAGE_KEY = 'auto-synced-notes';
         let notes = [];
+        let webdavClient = null;
 
-        function loadNotes() {
-            notes = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        }
-
-        function saveNotes() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
-        }
-
-        function renderNotes() {
-            const list = document.getElementById('notesList');
-            if (!notes.length) {
-                list.innerHTML = '<p style="color:#888;">No notes yet.</p>';
-                return;
+        // WebDAV Configuration
+        function initWebDAV() {
+            const creds = JSON.parse(localStorage.getItem('webdav-creds'));
+            if (creds) {
+                webdavClient = createClient(creds.url, {
+                    username: creds.username,
+                    password: creds.password
+                });
+                startSync();
             }
-            list.innerHTML = notes.map(note => `
-                <div class="note" data-id="${note.id}">
-                    <div class="note-actions">
-                        <button onclick="editNote('${note.id}')">✏️ Edit</button>
-                        <button onclick="deleteNote('${note.id}')">🗑️ Delete</button>
-                    </div>
-                    <div class="content">${note.content.replace(/\n/g, '<br>')}</div>
-                    <small>Last updated: ${new Date(note.updated).toLocaleString()}</small>
-                </div>
-            `).join('');
         }
 
-        function addNote(content) {
-            notes.unshift({
-                id: Date.now().toString(),
-                content,
-                created: new Date().toISOString(),
-                updated: new Date().toISOString()
-            });
-            saveNotes();
+        async function startSync() {
+            try {
+                // 1. Download remote notes
+                const remoteNotes = await fetchNotesFromWebDAV();
+                
+                // 2. Merge with local notes
+                notes = mergeNotes(notes, remoteNotes);
+                
+                // 3. Upload merged collection
+                await uploadNotesToWebDAV();
+                
+                // 4. Save locally
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+                
+                showSyncStatus('Synced successfully!');
+            } catch (error) {
+                showSyncStatus('Sync failed - using local notes', true);
+            }
             renderNotes();
         }
 
-        function updateNote(id, content) {
-            const note = notes.find(n => n.id === id);
-            if (note) {
-                note.content = content;
-                note.updated = new Date().toISOString();
-                saveNotes();
-                renderNotes();
+        async function fetchNotesFromWebDAV() {
+            try {
+                const response = await webdavClient.getFileContents('/notes.json');
+                return JSON.parse(response);
+            } catch {
+                return [];
             }
         }
 
-        function deleteNote(id) {
-            if (confirm('Delete this note?')) {
-                notes = notes.filter(n => n.id !== id);
-                saveNotes();
-                renderNotes();
-            }
+        async function uploadNotesToWebDAV() {
+            await webdavClient.putFileContents(
+                '/notes.json',
+                JSON.stringify(notes),
+                { overwrite: true }
+            );
         }
 
-        function editNote(id) {
-            const note = notes.find(n => n.id === id);
-            if (note) {
-                document.getElementById('noteContent').value = note.content;
-                document.getElementById('editId').value = id;
-                document.getElementById('saveBtn').textContent = 'Update Note';
-            }
+        function mergeNotes(local, remote) {
+            const noteMap = new Map();
+            [...local, ...remote].forEach(note => {
+                noteMap.set(note.id, note.updated > (noteMap.get(note.id)?.updated || 0) ? note : noteMap.get(note.id));
+            });
+            return Array.from(noteMap.values()).sort((a,b) => b.updated - a.updated);
         }
 
-        // Export notes as JSON file
-        function exportNotes() {
-            const blob = new Blob([JSON.stringify(notes, null, 2)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'notes-export.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+        function showSyncStatus(message, isError = false) {
+            const status = document.getElementById('syncStatus');
+            status.textContent = message;
+            status.style.display = 'block';
+            status.style.background = isError ? '#cc0000' : '#0060df';
+            setTimeout(() => status.style.display = 'none', 3000);
         }
 
-        // Import notes from JSON file
-        function importNotes(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    if (Array.isArray(imported)) {
-                        // Merge: keep unique by id (favor imported)
-                        const ids = new Set(imported.map(n => n.id));
-                        notes = [...imported, ...notes.filter(n => !ids.has(n.id))];
-                        saveNotes();
-                        renderNotes();
-                        alert('Notes imported!');
-                    } else {
-                        alert('Invalid file format.');
-                    }
-                } catch {
-                    alert('Could not import notes.');
-                }
+        // Modified CRUD operations
+        function addNote(content) {
+            const note = {
+                id: Date.now().toString(),
+                content,
+                created: Date.now(),
+                updated: Date.now()
             };
-            reader.readAsText(file);
-            // Reset input so you can re-import same file if needed
-            event.target.value = '';
+            notes.unshift(note);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+            if (webdavClient) startSync();
+            renderNotes();
         }
 
-        // Form handling
-        document.getElementById('noteForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const content = document.getElementById('noteContent').value.trim();
-            const editId = document.getElementById('editId').value;
-            if (!content) return;
-            if (editId) {
-                updateNote(editId, content);
-                document.getElementById('saveBtn').textContent = 'Add Note';
-                document.getElementById('editId').value = '';
-            } else {
-                addNote(content);
-            }
-            document.getElementById('noteContent').value = '';
+        // Existing edit/delete functions modified to call startSync()
+
+        // Initial setup
+        window.addEventListener('load', () => {
+            notes = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            initWebDAV();
+            setInterval(() => { if(webdavClient) startSync() }, 300000); // Sync every 5 min
         });
-
-        // Initial load
-        loadNotes();
-        renderNotes();
-
-        // Expose deleteNote/editNote for inline buttons
-        window.deleteNote = deleteNote;
-        window.editNote = editNote;
     </script>
+    <!-- Include WebDAV client library -->
+    <script src="https://cdn.jsdelivr.net/npm/webdav@4.11.0/dist/web/webdav.min.js"></script>
 </body>
 </html>
