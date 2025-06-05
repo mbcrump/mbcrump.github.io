@@ -1,109 +1,154 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Local Storage Notes</title>
-    <style>
-        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
-        .note { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
-        .note-content { margin: 5px 0; }
-        .note-date { font-size: 0.8em; color: #666; }
-        button { margin: 5px; padding: 5px 10px; cursor: pointer; }
-        #notesList { margin-top: 20px; }
-    </style>
+  <title>RemoteStorage Notes App</title>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    textarea { width: 100%; height: 80px; }
+    .note { background: #f5f5f5; margin: 1em 0; padding: 1em; border-radius: 5px; }
+    .note-date { font-size: 0.9em; color: #888; }
+    button { margin: 0.3em; }
+  </style>
+  <script src="https://unpkg.com/remotestoragejs@latest/release/remotestorage.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Notes App</h1>
-        <form id="noteForm">
-            <textarea id="noteInput" rows="4" cols="50" placeholder="Enter your note..."></textarea>
-            <button type="submit">Save Note</button>
-        </form>
-        <div id="notesList"></div>
-    </div>
+  <h1>Notes App (RemoteStorage)</h1>
+  <button id="connect-btn">Connect RemoteStorage</button>
+  <button id="disconnect-btn" style="display:none;">Disconnect</button>
+  <form id="noteForm" style="display:none;">
+    <textarea id="noteInput" placeholder="Enter your note..."></textarea>
+    <button type="submit">Save Note</button>
+  </form>
+  <div id="notesList"></div>
 
-    <script>
-        // Initialize notes from localStorage
-        let notes = JSON.parse(localStorage.getItem('notes')) || [];
-        
-        // Display existing notes on page load
-        document.addEventListener('DOMContentLoaded', displayNotes);
-
-        // Form submission handler
-        document.getElementById('noteForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const noteInput = document.getElementById('noteInput');
-            const noteId = document.querySelector('#noteForm [name="id"]')?.value;
-            
-            if (noteId) {
-                updateNote(noteId, noteInput.value);
-            } else {
-                createNote(noteInput.value);
-            }
-            noteInput.value = '';
-            displayNotes();
-        });
-
-        // Create new note
-        function createNote(content) {
-            const newNote = {
-                id: Date.now(),
-                content: content,
-                date: new Date().toLocaleString()
-            };
-            notes.push(newNote);
-            localStorage.setItem('notes', JSON.stringify(notes));
+  <script>
+    // Register a "notes" module with RemoteStorage
+    remoteStorage.defineModule('notes', function(privateClient) {
+      return {
+        exports: {
+          // Save or update a note (by id)
+          saveNote: function(note) {
+            return privateClient.storeObject('note', note.id, note);
+          },
+          // Remove a note (by id)
+          removeNote: function(id) {
+            return privateClient.remove('notes/' + id);
+          },
+          // List all notes
+          listNotes: function() {
+            return privateClient.getAll('notes/');
+          }
         }
+      };
+    });
 
-        // Read all notes
-        function displayNotes() {
-            const notesList = document.getElementById('notesList');
-            notesList.innerHTML = '';
-            
-            notes.forEach(note => {
-                const noteDiv = document.createElement('div');
-                noteDiv.className = 'note';
-                noteDiv.innerHTML = `
-                    <div class="note-content">${linkify(note.content)}</div>
-                    <div class="note-date">${note.date}</div>
-                    <button onclick="editNote(${note.id})">Edit</button>
-                    <button onclick="deleteNote(${note.id})">Delete</button>
-                `;
-                notesList.appendChild(noteDiv);
-            });
-        }
+    // Enable access to the "notes" module
+    remoteStorage.access.claim('notes', 'rw');
+    remoteStorage.caching.enable('/notes/');
 
-        // Update existing note
-        function updateNote(id, newContent) {
-            notes = notes.map(note => 
-                note.id === Number(id) 
-                ? {...note, content: newContent, date: new Date().toLocaleString()} 
-                : note
-            );
-            localStorage.setItem('notes', JSON.stringify(notes));
-        }
+    // UI elements
+    const connectBtn = document.getElementById('connect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const noteForm = document.getElementById('noteForm');
+    const noteInput = document.getElementById('noteInput');
+    const notesList = document.getElementById('notesList');
 
-        // Delete note
-        function deleteNote(id) {
-            notes = notes.filter(note => note.id !== Number(id));
-            localStorage.setItem('notes', JSON.stringify(notes));
-            displayNotes();
-        }
+    let notes = {};
 
-        // Edit note
-        function editNote(id) {
-            const note = notes.find(note => note.id === Number(id));
-            document.getElementById('noteInput').value = note.content;
-            document.getElementById('noteForm').innerHTML += 
-                `<input type="hidden" name="id" value="${note.id}">`;
-        }
+    // Connect/Disconnect handlers
+    connectBtn.onclick = () => remoteStorage.connect();
+    disconnectBtn.onclick = () => remoteStorage.disconnect();
 
-        // Convert URLs to clickable links
-        function linkify(text) {
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            return text.replace(urlRegex, url => 
-                `<a href="${url}" target="_blank">${url}</a>`
-            );
-        }
-    </script>
+    // Listen for connection changes
+    remoteStorage.on('connected', async function() {
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = '';
+      noteForm.style.display = '';
+      await loadNotes();
+    });
+
+    remoteStorage.on('disconnected', function() {
+      connectBtn.style.display = '';
+      disconnectBtn.style.display = 'none';
+      noteForm.style.display = 'none';
+      notesList.innerHTML = '';
+      notes = {};
+    });
+
+    // Load notes from RemoteStorage
+    async function loadNotes() {
+      notes = await remoteStorage.notes.listNotes();
+      displayNotes();
+    }
+
+    // Display notes
+    function displayNotes() {
+      notesList.innerHTML = '';
+      Object.values(notes).sort((a, b) => b.id - a.id).forEach(note => {
+        const div = document.createElement('div');
+        div.className = 'note';
+        div.innerHTML = `
+          <div>${linkify(note.content)}</div>
+          <div class="note-date">${note.date}</div>
+          <button onclick="editNote('${note.id}')">Edit</button>
+          <button onclick="deleteNote('${note.id}')">Delete</button>
+        `;
+        notesList.appendChild(div);
+      });
+    }
+
+    // Linkify URLs
+    function linkify(text) {
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      return text.replace(urlRegex, url => 
+        `<a href="${url}" target="_blank" rel="noopener">${url}</a>`
+      );
+    }
+
+    // CRUD Handlers
+    noteForm.onsubmit = async function(e) {
+      e.preventDefault();
+      const content = noteInput.value.trim();
+      if (!content) return;
+      let editingId = noteForm.dataset.editing;
+      let note;
+      if (editingId) {
+        note = notes[editingId];
+        note.content = content;
+        note.date = new Date().toLocaleString();
+        delete noteForm.dataset.editing;
+      } else {
+        note = {
+          id: Date.now().toString(),
+          content: content,
+          date: new Date().toLocaleString()
+        };
+      }
+      await remoteStorage.notes.saveNote(note);
+      noteInput.value = '';
+      await loadNotes();
+    };
+
+    window.deleteNote = async function(id) {
+      await remoteStorage.notes.removeNote(id);
+      await loadNotes();
+    };
+
+    window.editNote = function(id) {
+      noteInput.value = notes[id].content;
+      noteForm.dataset.editing = id;
+      noteInput.focus();
+    };
+
+    // Show connect button on load if not connected
+    if (!remoteStorage.connected) {
+      connectBtn.style.display = '';
+    } else {
+      disconnectBtn.style.display = '';
+      noteForm.style.display = '';
+      loadNotes();
+    }
+  </script>
 </body>
 </html>
