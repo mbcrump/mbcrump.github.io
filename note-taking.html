@@ -28,25 +28,27 @@
   <div id="notesList"></div>
 
   <script>
-    // Initialize RemoteStorage and the notes module
+    // Initialize RemoteStorage
     const remoteStorage = new RemoteStorage();
 
-    remoteStorage.defineModule('notes', function(privateClient) {
-      return {
-        exports: {
-          saveNote: function(note) {
-            return privateClient.storeObject('note', note.id, note);
-          },
-          removeNote: function(id) {
-            return privateClient.remove('notes/' + id);
-          },
-          listNotes: function() {
-            return privateClient.getAll('notes/');
-          }
-        }
-      };
-    });
+    // Define the notes module using the modern API
+    class NotesModule extends RemoteStorage.BaseClient {
+      constructor() {
+        super('/notes/');
+      }
+      async saveNote(note) {
+        return this.storeObject('note', note.id, note);
+      }
+      async removeNote(id) {
+        return this.remove(id);
+      }
+      async listNotes() {
+        return this.getAll('');
+      }
+    }
 
+    // Register the module and claim access
+    remoteStorage.addModule('notes', NotesModule);
     remoteStorage.access.claim('notes', 'rw');
     remoteStorage.caching.enable('/notes/');
 
