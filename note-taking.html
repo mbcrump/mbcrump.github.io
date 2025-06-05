@@ -12,10 +12,10 @@
     #noteForm { margin-top: 1em; }
     #remotestorage-widget-anchor { margin-bottom: 1em; }
   </style>
-  <!-- RemoteStorage core library -->
-  <script src="https://unpkg.com/remotestoragejs@latest/release/remotestorage.min.js"></script>
-  <!-- RemoteStorage Connect Widget -->
-  <script src="https://unpkg.com/remotestorage-widget@latest/build/widget.min.js"></script>
+  <!-- RemoteStorage core library (jsDelivr CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/remotestoragejs@2.0.0-beta.7/release/remotestorage.min.js"></script>
+  <!-- RemoteStorage Connect Widget (jsDelivr CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/remotestorage-widget@1.6.0/build/widget.min.js"></script>
 </head>
 <body>
   <h1>Notes App (RemoteStorage)</h1>
@@ -50,7 +50,7 @@
     remoteStorage.access.claim('notes', 'rw');
     remoteStorage.caching.enable('/notes/');
 
-    // Attach the Connect Widget (this is the CORRECT way)
+    // Attach the Connect Widget
     remoteStorage.displayWidget('remotestorage-widget-anchor');
 
     // UI elements
@@ -145,4 +145,23 @@
 
     // Show/hide UI based on connection state
     remoteStorage.on('connected', function() {
-      note
+      noteForm.style.display = '';
+      loadNotes();
+    });
+
+    remoteStorage.on('disconnected', function() {
+      noteForm.style.display = 'none';
+      notesList.innerHTML = '';
+      notes = {};
+      editingId = null;
+      cancelEditBtn.style.display = 'none';
+    });
+
+    // If already connected, show UI
+    if (remoteStorage.connected) {
+      noteForm.style.display = '';
+      loadNotes();
+    }
+  </script>
+</body>
+</html>
