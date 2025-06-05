@@ -1,169 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>RemoteStorage Notes App</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 2em; }
-    textarea { width: 100%; height: 80px; }
-    .note { background: #f5f5f5; margin: 1em 0; padding: 1em; border-radius: 5px; }
-    .note-date { font-size: 0.9em; color: #888; }
-    button { margin: 0.3em; }
-    #noteForm { margin-top: 1em; }
-    #remotestorage-widget-anchor { margin-bottom: 1em; }
-  </style>
-  <!-- RemoteStorage core library (jsDelivr CDN) -->
-  <script src="https://cdn.jsdelivr.net/npm/remotestoragejs@2.0.0-beta.7/release/remotestorage.min.js"></script>
-  <!-- RemoteStorage Connect Widget (jsDelivr CDN) -->
-  <script src="https://cdn.jsdelivr.net/npm/remotestorage-widget@1.6.0/build/widget.min.js"></script>
+    <meta charset="UTF-8">
+    <title>Personal Firefox Notes</title>
+    <style>
+        :root { --primary: #0060df; --background: #f0f0f4; }
+        body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: var(--background); }
+        .container { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+        #noteForm { display: grid; gap: 1rem; margin-bottom: 2rem; }
+        textarea { height: 150px; padding: 1rem; border: 2px solid var(--primary); border-radius: 4px; resize: vertical; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .note { background: white; padding: 1rem; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative; }
+        .note-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; }
+    </style>
 </head>
 <body>
-  <h1>Notes App (RemoteStorage)</h1>
-  <div id="remotestorage-widget-anchor"></div>
-  <form id="noteForm" style="display:none;">
-    <textarea id="noteInput" placeholder="Enter your note..."></textarea>
-    <button type="submit">Save Note</button>
-    <button type="button" id="cancelEdit" style="display:none;">Cancel Edit</button>
-  </form>
-  <div id="notesList"></div>
+    <h1>Firefox Synced Notes</h1>
+    
+    <form id="noteForm">
+        <textarea id="noteContent" placeholder="Start typing..."></textarea>
+        <button type="submit">Save Note</button>
+    </form>
 
-  <script>
-    // Initialize RemoteStorage
-    const remoteStorage = new RemoteStorage();
+    <div id="notesList" class="container"></div>
 
-    // Define the notes module using the modern API
-    class NotesModule extends RemoteStorage.BaseClient {
-      constructor() {
-        super('/notes/');
-      }
-      async saveNote(note) {
-        return this.storeObject('note', note.id, note);
-      }
-      async removeNote(id) {
-        return this.remove(id);
-      }
-      async listNotes() {
-        return this.getAll('');
-      }
-    }
+    <script>
+        // Initialize Firefox Notes integration
+        let isFirefox = typeof InstallTrigger !== 'undefined';
+        let notes = JSON.parse(localStorage.getItem('ff-notes') || '[]');
+        
+        // Firefox Sync integration
+        async function syncWithFirefox() {
+            if (!isFirefox) return;
+            
+            try {
+                // Attempt to use Firefox's experimental notes API
+                const remoteNotes = await browser.storage.sync.get('notes');
+                if (remoteNotes.notes) {
+                    notes = [...notes, ...remoteNotes.notes.filter(n => 
+                        !notes.some(localNote => localNote.id === n.id)
+                    )];
+                    localStorage.setItem('ff-notes', JSON.stringify(notes));
+                }
+                await browser.storage.sync.set({ notes });
+                renderNotes();
+            } catch (error) {
+                console.log('Firefox Sync unavailable, using localStorage');
+            }
+        }
 
-    // Register the module and claim access
-    remoteStorage.addModule('notes', NotesModule);
-    remoteStorage.access.claim('notes', 'rw');
-    remoteStorage.caching.enable('/notes/');
+        // CRUD Operations
+        function createNote(content) {
+            const note = {
+                id: Date.now(),
+                content,
+                created: new Date().toISOString(),
+                updated: new Date().toISOString()
+            };
+            notes.unshift(note);
+            updateStorage();
+        }
 
-    // Attach the Connect Widget
-    remoteStorage.displayWidget('remotestorage-widget-anchor');
+        function updateNote(id, newContent) {
+            const note = notes.find(n => n.id === id);
+            note.content = newContent;
+            note.updated = new Date().toISOString();
+            updateStorage();
+        }
 
-    // UI elements
-    const noteForm = document.getElementById('noteForm');
-    const noteInput = document.getElementById('noteInput');
-    const notesList = document.getElementById('notesList');
-    const cancelEditBtn = document.getElementById('cancelEdit');
+        function deleteNote(id) {
+            notes = notes.filter(note => note.id !== id);
+            updateStorage();
+        }
 
-    let notes = {};
-    let editingId = null;
+        function updateStorage() {
+            localStorage.setItem('ff-notes', JSON.stringify(notes));
+            if (isFirefox) {
+                browser.storage.sync.set({ notes }).catch(() => {
+                    console.log('Sync failed, using local storage');
+                });
+            }
+            renderNotes();
+        }
 
-    // Load and display notes
-    async function loadNotes() {
-      notes = await remoteStorage.notes.listNotes();
-      displayNotes();
-    }
+        function renderNotes() {
+            const container = document.getElementById('notesList');
+            container.innerHTML = notes.map(note => `
+                <div class="note" data-id="${note.id}">
+                    <div class="note-actions">
+                        <button onclick="editNote(${note.id})">✏️</button>
+                        <button onclick="deleteNote(${note.id})">🗑️</button>
+                    </div>
+                    <div class="content">${note.content.replace(/\n/g, '<br>')}</div>
+                    <small>Updated: ${new Date(note.updated).toLocaleString()}</small>
+                </div>
+            `).join('');
+        }
 
-    function displayNotes() {
-      notesList.innerHTML = '';
-      // Sort notes by most recent
-      Object.values(notes)
-        .sort((a, b) => b.id - a.id)
-        .forEach(note => {
-          const div = document.createElement('div');
-          div.className = 'note';
-          div.innerHTML = `
-            <div>${linkify(note.content)}</div>
-            <div class="note-date">${note.date}</div>
-            <button onclick="editNote('${note.id}')">Edit</button>
-            <button onclick="deleteNote('${note.id}')">Delete</button>
-          `;
-          notesList.appendChild(div);
+        // Form Handling
+        document.getElementById('noteForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const content = document.getElementById('noteContent').value.trim();
+            if (content) {
+                createNote(content);
+                document.getElementById('noteContent').value = '';
+            }
         });
-    }
 
-    // Make URLs clickable
-    function linkify(text) {
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      return text.replace(urlRegex, url =>
-        `<a href="${url}" target="_blank" rel="noopener">${url}</a>`
-      );
-    }
-
-    // Form submit: create or update note
-    noteForm.onsubmit = async function(e) {
-      e.preventDefault();
-      const content = noteInput.value.trim();
-      if (!content) return;
-      let note;
-      if (editingId) {
-        note = notes[editingId];
-        note.content = content;
-        note.date = new Date().toLocaleString();
-      } else {
-        note = {
-          id: Date.now().toString(),
-          content: content,
-          date: new Date().toLocaleString()
-        };
-      }
-      await remoteStorage.notes.saveNote(note);
-      noteInput.value = '';
-      editingId = null;
-      cancelEditBtn.style.display = 'none';
-      await loadNotes();
-    };
-
-    // Cancel editing
-    cancelEditBtn.onclick = function() {
-      noteInput.value = '';
-      editingId = null;
-      cancelEditBtn.style.display = 'none';
-    };
-
-    // Expose edit/delete to global scope for button onclick
-    window.editNote = function(id) {
-      noteInput.value = notes[id].content;
-      editingId = id;
-      cancelEditBtn.style.display = '';
-      noteInput.focus();
-    };
-
-    window.deleteNote = async function(id) {
-      if (editingId === id) {
-        noteInput.value = '';
-        editingId = null;
-        cancelEditBtn.style.display = 'none';
-      }
-      await remoteStorage.notes.removeNote(id);
-      await loadNotes();
-    };
-
-    // Show/hide UI based on connection state
-    remoteStorage.on('connected', function() {
-      noteForm.style.display = '';
-      loadNotes();
-    });
-
-    remoteStorage.on('disconnected', function() {
-      noteForm.style.display = 'none';
-      notesList.innerHTML = '';
-      notes = {};
-      editingId = null;
-      cancelEditBtn.style.display = 'none';
-    });
-
-    // If already connected, show UI
-    if (remoteStorage.connected) {
-      noteForm.style.display = '';
-      loadNotes();
-    }
-  </script>
+        // Initial setup
+        renderNotes();
+        if (isFirefox) {
+            syncWithFirefox();
+            setInterval(syncWithFirefox, 30000); // Sync every 30 seconds
+        }
+    </script>
 </body>
 </html>
