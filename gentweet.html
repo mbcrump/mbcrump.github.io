@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -11,7 +10,6 @@
     textarea { width: 70%; height: 80px; margin-bottom: 1em; }
     button { margin-right: 1em; padding: 0.5em 1em; }
     #status { color: #666; margin-bottom: 1em; }
-    .section { margin-bottom: 32px; }
   </style>
 </head>
 <body>
@@ -25,13 +23,6 @@
   <button onclick="copyTweet()">Copy</button>
   <button id="tweet-btn" style="display:none;" onclick="tweetNow()">Tweet</button>
 
-  <!-- Appreciation Message Section -->
-  <div class="section">
-    <label for="appreciateText">Appreciation Message:</label>
-    <input type="text" id="appreciateText" value="Thanks for watching! 🙌 Daily homebrew updates + cool finds over on X 👉 https://x.com/crump_youtube" readonly>
-    <button onclick="copyAppreciateText()">Copy Appreciation Message</button>
-  </div>
-
   <script>
     function extractVideoId(url) {
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -41,7 +32,7 @@
 
     async function fetchVideoTitle(videoId) {
       try {
-        const response = await fetch(`https://noembed.com/embed?dataType=json&url=https://www.youtube.com/watch?v=${videoId}`);
+        const response = await fetch(https://noembed.com/embed?dataType=json&url=https://www.youtube.com/watch?v=${videoId});
         const data = await response.json();
         return data.title || '[Title Not Found]';
       } catch (error) {
@@ -52,3 +43,41 @@
 
     async function generateTweet() {
       const urlInput = document.getElementById('yt-url').value.trim();
+      const statusEl = document.getElementById('status');
+      const videoId = extractVideoId(urlInput);
+
+      if (!videoId) {
+        alert('Please enter a valid YouTube URL');
+        return;
+      }
+
+      statusEl.textContent = 'Fetching video title...';
+      
+      try {
+        const videoTitle = await fetchVideoTitle(videoId);
+        const tweetText = 🎬 New video: ${videoTitle}\n\n▶️ ${urlInput}\n\nRT/Likes are appreciated!;
+        
+        document.getElementById('tweet-output').value = tweetText;
+        document.getElementById('tweet-btn').style.display = 'inline-block';
+        statusEl.textContent = 'Title fetched successfully!';
+      } catch (error) {
+        statusEl.textContent = 'Could not fetch title - using default template';
+        document.getElementById('tweet-output').value = Check out this video! ${urlInput};
+      }
+    }
+
+    function copyTweet() {
+      const tweetOutput = document.getElementById('tweet-output');
+      tweetOutput.select();
+      tweetOutput.setSelectionRange(0, 99999);
+      document.execCommand('copy');
+      alert('Tweet copied to clipboard!');
+    }
+
+    function tweetNow() {
+      const tweetText = encodeURIComponent(document.getElementById('tweet-output').value);
+      window.open(https://twitter.com/intent/tweet?text=${tweetText}, '_blank');
+    }
+  </script>
+</body>
+</html>
