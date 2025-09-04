@@ -1,25 +1,13 @@
 <!DOCTYPE html>
-
-
 <html lang="en">
-
-
-<head>
-
-
-  <meta charset="UTF-8">
-
-
-  <title>YouTube Tweet Generator</title>
-
-
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-
+ <head>
+  <meta charset="utf-8"/>
+  <title>
+   YouTube Tweet Generator
+  </title>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
   <style>
-
-
-    body { font-family: Arial, sans-serif; margin: 2em; background: #fafbfc; }
+   body { font-family: Arial, sans-serif; margin: 2em; background: #fafbfc; }
 
 
     label, input, button, textarea { font-size: 1.1em; }
@@ -35,51 +23,38 @@
 
 
     #status { color: #666; margin-bottom: 1em; }
-
-
   </style>
-
-
-</head>
-
-
-<body>
-
-
-  <h2>YouTube Tweet Generator</h2>
-
-
-  <label for="yt-url">Enter YouTube URL:</label><br>
-
-
-  <input type="text" id="yt-url" placeholder="https://www.youtube.com/watch?v=..." /><br>
-
-
-  <button onclick="generateTweet()">Generate Tweet</button>
-
-
-  <div id="status"></div>
-
-
-  <label for="tweet-output">Copy/Paste Ready Tweet:</label><br>
-
-
-  <textarea id="tweet-output" readonly></textarea><br>
-
-
-  <button onclick="copyTweet()">Copy</button>
-
-
-  <button id="tweet-btn" style="display:none;" onclick="tweetNow()">Tweet</button>
-
-
-
-
-
+ </head>
+ <body>
+  <h2>
+   YouTube Tweet Generator
+  </h2>
+  <label for="yt-url">
+   Enter YouTube URL:
+  </label>
+  <br/>
+  <input id="yt-url" placeholder="https://www.youtube.com/watch?v=..." type="text"/>
+  <br/>
+  <button onclick="generateTweet()">
+   Generate Tweet
+  </button>
+  <div id="status">
+  </div>
+  <label for="tweet-output">
+   Copy/Paste Ready Tweet:
+  </label>
+  <div id="cptstatus"></div>
+  <br/>
+  <textarea id="tweet-output" readonly="">If you like this sorta thing, follow me on X at https://x.com/crump_youtube</textarea>
+  <br/>
+  <button onclick="copyTweet()">
+   Copy
+  </button>
+  <button id="tweet-btn" onclick="tweetNow()" style="display:none;">
+   Tweet
+  </button>
   <script>
-
-
-    function extractVideoId(url) {
+   function extractVideoId(url) {
 
 
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -210,6 +185,7 @@
 
       const tweetOutput = document.getElementById('tweet-output');
 
+      const statuscpt = document.getElementById('cptstatus');
 
       tweetOutput.select();
 
@@ -219,9 +195,7 @@
 
       document.execCommand('copy');
 
-
-      alert('Tweet copied to clipboard!');
-
+      statuscpt.textContent = "Tweet copied to clipboard!"
 
     }
 
@@ -239,12 +213,6 @@
 
 
     }
-
-
   </script>
-
-
-</body>
-
-
+ </body>
 </html>
